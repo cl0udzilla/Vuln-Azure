@@ -1,0 +1,56 @@
+name: 'Shift Left Action'
+
+on:
+  push:
+    branches:
+    - master
+    paths:
+    - '_build_flag'
+jobs:
+  build: 
+#Set up environment
+    runs-on: ubuntu-latest
+    env:
+      working-directory: . 
+      SG_CLIENT_ID: ${{ secrets.SG_CLIENT_ID }}
+      SG_SECRET_KEY: ${{ secrets.SG_SECRET_KEY }}   
+      CHKP_CLOUDGUARD_ID: ${{ secrets.CHKP_CLOUDGUARD_ID }}
+      CHKP_CLOUDGUARD_SECRET: ${{ secrets.CHKP_CLOUDGUARD_SECRET }}
+    steps:
+ 
+#Pull Code and Images deployed by IaC    
+    - name: Checkout Code
+      uses: actions/checkout@v2
+      with:
+        path: main
+  
+    - name: Checkout tools repo
+      uses: actions/checkout@v2
+      with:
+        repository:  metalstormbass/VulnerableWebApp
+        path: VulnerableWebApp 
+  
+    - name: Pull Docker Container
+      run: |
+        docker pull yonatanph/logicdemo:latest
+        docker save yonatanph/logicdemo:latest -o logicdemo.tar
+        
+#Scan IaC code      
+    - name: ShiftLeft IaC Scan
+      run: |
+            chmod +x main/shiftleft
+            main/shiftleft iac-assessment --path main/.
+      continue-on-error: true
+    
+ 
+#Scan Container Image      
+    - name: ShiftLeft Container Scan
+      run: |        
+            main/shiftleft image-scan -t 1800 -i ./logicdemo.tar
+      continue-on-error: true
+
+#Scan Web Application Code    
+    - name: ShiftLeft SourceGuard Web Application Scan
+      run: |        
+            main/shiftleft sourceguard -s VulnerableWebApp/
+      continue-on-error: true
